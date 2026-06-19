@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>新能源汽车动力电池全生命周期溯源与梯次利用平台</title>
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css" />
+<script src="https://unpkg.com/vue@3.4.0/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/element-plus@2.4.4/dist/locale/zh-cn.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
+<script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="https://unpkg.com/axios@1.6.2/dist/axios.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body, #app { height:100%; width:100%; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+body { background:#f0f2f5; }
+.login-bg { min-height:100vh; background:linear-gradient(135deg,#0c1929 0%,#1a3a5c 50%,#0e4d6b 100%); display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+.login-bg::before { content:''; position:absolute; inset:0; background:radial-gradient(circle at 20% 30%,rgba(0,180,255,.15),transparent 50%),radial-gradient(circle at 80% 70%,rgba(0,255,180,.1),transparent 50%); }
+.login-card { background:rgba(255,255,255,.97); border-radius:16px; padding:48px 44px; width:460px; box-shadow:0 30px 60px rgba(0,0,0,.3); position:relative; z-index:2; }
+.login-title { font-size:22px; font-weight:700; color:#0f3c7a; text-align:center; margin-bottom:6px; }
+.login-subtitle { font-size:13px; color:#6b7280; text-align:center; margin-bottom:30px; }
+.login-logo { width:72px; height:72px; margin:0 auto 18px; border-radius:18px; background:linear-gradient(135deg,#00d4ff,#0f78ff); display:flex; align-items:center; justify-content:center; font-size:38px; color:#fff; box-shadow:0 10px 25px rgba(15,120,255,.4); }
+.tip-list { margin-top:22px; padding:14px 16px; background:#f0f7ff; border-radius:10px; border-left:3px solid #0f78ff; }
+.tip-list .tip-item { font-size:12px; color:#374151; line-height:1.9; }
+.tip-item b { color:#0f3c7a; }
+.layout { height:100vh; display:flex; flex-direction:column; }
+.header { height:60px; background:linear-gradient(90deg,#0a2540 0%,#0f3c7a 50%,#0a5279 100%); display:flex; align-items:center; color:#fff; padding:0 24px; box-shadow:0 2px 12px rgba(0,0,0,.1); z-index:10; }
+.header .logo { display:flex; align-items:center; font-size:18px; font-weight:700; gap:12px; }
+.header .logo-icon { width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,.15); display:flex; align-items:center; justify-content:center; font-size:20px; }
+.header .spacer { flex:1; }
+.header .user-info { display:flex; align-items:center; gap:12px; font-size:14px; }
+.header .role-tag { background:rgba(0,212,255,.2); padding:4px 12px; border-radius:16px; font-size:12px; color:#7dd3fc; }
+.header .company { color:#cbd5e1; }
+.main { flex:1; display:flex; overflow:hidden; }
+.sidebar { width:230px; background:#0a1929; color:#94a3b8; flex-shrink:0; overflow-y:auto; padding:16px 0; border-right:1px solid #1e293b; }
+.sidebar .menu-title { padding:8px 20px 6px; font-size:11px; color:#475569; letter-spacing:1px; }
+.sidebar .menu-item { display:flex; align-items:center; gap:12px; padding:12px 20px; cursor:pointer; border-left:3px solid transparent; transition:all .2s; font-size:14px; }
+.sidebar .menu-item:hover { background:rgba(255,255,255,.03); color:#e2e8f0; }
+.sidebar .menu-item.active { background:linear-gradient(90deg,rgba(15,120,255,.18),transparent); color:#60a5fa; border-left-color:#0f78ff; font-weight:600; }
+.sidebar .menu-item .icon { font-size:18px; width:22px; text-align:center; }
+.content { flex:1; overflow-y:auto; padding:20px; background:#f0f2f5; }
+.page-title { font-size:20px; font-weight:700; color:#0f172a; margin-bottom:4px; }
+.page-subtitle { font-size:13px; color:#64748b; margin-bottom:18px; }
+.card { background:#fff; border-radius:12px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+.card-title { font-size:16px; font-weight:700; color:#0f172a; }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-bottom:20px; }
+.stat-card { background:#fff; border-radius:12px; padding:20px; position:relative; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); transition:transform .2s; }
+.stat-card:hover { transform:translateY(-2px); }
+.stat-card .icon-box { position:absolute; right:16px; top:16px; width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; }
+.stat-card .label { font-size:13px; color:#64748b; margin-bottom:10px; }
+.stat-card .value { font-size:28px; font-weight:700; color:#0f172a; }
+.stat-card .sub { font-size:12px; color:#94a3b8; margin-top:6px; }
+.bg-blue { background:linear-gradient(135deg,#dbeafe,#bfdbfe); color:#1d4ed8; }
+.bg-green { background:linear-gradient(135deg,#dcfce7,#bbf7d0); color:#15803d; }
+.bg-orange { background:linear-gradient(135deg,#ffedd5,#fed7aa); color:#c2410c; }
+.bg-red { background:linear-gradient(135deg,#fee2e2,#fecaca); color:#b91c1c; }
+.bg-purple { background:linear-gradient(135deg,#ede9fe,#ddd6fe); color:#7c3aed; }
+.bg-cyan { background:linear-gradient(135deg,#cffafe,#a5f3fc); color:#0e7490; }
+.chart-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(450px,1fr)); gap:16px; margin-top:18px; }
+.chart-box { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.chart-box .chart-title { font-size:14px; font-weight:600; color:#0f172a; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
+.chart { height:300px; }
+.filter-bar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+.filter-bar > * { flex-shrink:0; }
+.monitor-screen { min-height:100vh; padding:16px; background:#040c1c; background-image:radial-gradient(circle at 10% 20%,rgba(15,120,255,.08),transparent 40%),radial-gradient(circle at 90% 80%,rgba(0,212,255,.06),transparent 40%); color:#e2e8f0; }
+.monitor-title { text-align:center; font-size:28px; font-weight:800; letter-spacing:4px; background:linear-gradient(90deg,#60a5fa,#22d3ee,#60a5fa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:6px; }
+.monitor-subtitle { text-align:center; color:#64748b; font-size:12px; margin-bottom:18px; letter-spacing:2px; }
+.monitor-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding:10px 16px; background:rgba(30,41,59,.5); border:1px solid rgba(96,165,250,.2); border-radius:8px; }
+.monitor-toolbar .time { font-family:monospace; color:#22d3ee; font-size:14px; }
+.monitor-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:14px; }
+.monitor-card { background:linear-gradient(180deg,rgba(15,30,60,.8),rgba(10,20,40,.8)); border:1px solid rgba(96,165,250,.25); border-radius:10px; padding:14px; position:relative; }
+.monitor-card::before, .monitor-card::after { content:''; position:absolute; width:14px; height:14px; border:2px solid #22d3ee; }
+.monitor-card::before { top:-1px; left:-1px; border-right:none; border-bottom:none; }
+.monitor-card::after { bottom:-1px; right:-1px; border-left:none; border-top:none; }
+.monitor-card .m-title { font-size:14px; font-weight:600; color:#93c5fd; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid rgba(96,165,250,.15); display:flex; align-items:center; gap:8px; }
+.monitor-card .m-title::before { content:''; display:inline-block; width:3px; height:14px; background:linear-gradient(180deg,#22d3ee,transparent); }
+.monitor-stat { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.monitor-stat-item { background:rgba(30,58,138,.2); border-radius:6px; padding:10px; text-align:center; }
+.monitor-stat-item .v { font-size:24px; font-weight:700; color:#22d3ee; font-family:'DIN',monospace; }
+.monitor-stat-item .l { font-size:11px; color:#64748b; margin-top:3px; }
+.monitor-list { font-size:12px; }
+.monitor-list .item { display:flex; justify-content:space-between; padding:7px 4px; border-bottom:1px dashed rgba(148,163,184,.1); }
+.monitor-list .item:last-child { border:none; }
+.monitor-list .warn { color:#f87171; }
+.monitor-list .ok { color:#4ade80; }
+.m-chart { height:200px; }
+.tag { display:inline-block; padding:2px 10px; border-radius:10px; font-size:12px; }
+.tag-green { background:#dcfce7; color:#15803d; }
+.tag-blue { background:#dbeafe; color:#1d4ed8; }
+.tag-red { background:#fee2e2; color:#b91c1c; }
+.tag-orange { background:#ffedd5; color:#c2410c; }
+.tag-gray { background:#f1f5f9; color:#475569; }
+.tag-cyan { background:#cffafe; color:#0e7490; }
+.tag-purple { background:#ede9fe; color:#7c3aed; }
+.status-tag-produced { background:#f1f5f9; color:#475569; }
+.status-tag-installed { background:#dbeafe; color:#1d4ed8; }
+.status-tag-in_use { background:#dcfce7; color:#15803d; }
+.status-tag-scrapped { background:#ffedd5; color:#c2410c; }
+.status-tag-second_life { background:#ede9fe; color:#7c3aed; }
+.status-tag-recycled { background:#cffafe; color:#0e7490; }
+.pre-wrap { white-space:pre-wrap; font-family:'Courier New',monospace; font-size:12px; background:#f8fafc; padding:16px; border-radius:8px; line-height:1.8; color:#334155; max-height:500px; overflow-y:auto; }
+.scroll-bar::-webkit-scrollbar { width:6px; height:6px; }
+.scroll-bar::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px; }
+.sidebar::-webkit-scrollbar { width:4px; }
+.sidebar::-webkit-scrollbar-thumb { background:#334155; border-radius:2px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div v-if="!isLogin" class="login-bg">
+    <div class="login-card">
+      <div class="login-logo">⚡</div>
+      <div class="login-title">动力电池溯源与梯次利用平台</div>
+      <div class="login-subtitle">Battery Full Lifecycle Traceability Platform</div>
+      <el-form :model="loginForm" label-position="top" @submit.prevent>
+        <el-form-item label="用户名"><el-input v-model="loginForm.username" size="large" placeholder="请输入用户名" /></el-form-item>
+        <el-form-item label="密码"><el-input v-model="loginForm.password" size="large" type="password" placeholder="请输入密码" show-password @keyup.enter="handleLogin" /></el-form-item>
+        <el-button type="primary" size="large" style="width:100%;margin-top:8px;background:linear-gradient(90deg,#0f78ff,#00d4ff);border:none;" @click="handleLogin" :loading="loginLoading">登 录</el-button>
+      </el-form>
+      <div class="tip-list">
+        <div class="tip-item">演示账号：<b>admin</b>  / <b>123456</b> （监管部门）</div>
+        <div class="tip-item">演示账号：<b>battery1</b> / <b>123456</b> （电池厂）</div>
+        <div class="tip-item">演示账号：<b>auto1</b>  / <b>123456</b> （车企）</div>
+        <div class="tip-item">演示账号：<b>recycle1</b> / <b>123456</b> （回收商）</div>
+      </div>
+    </div>
+  </div>
+  <div v-else class="layout">
+    <div class="header">
+      <div class="logo"><div class="logo-icon">⚡</div><div>动力电池全生命周期溯源与梯次利用平台</div></div>
+      <div class="spacer"></div>
+      <div class="user-info">
+        <span class="role-tag">{{ currentUser.role_name }}</span>
+        <span class="company">{{ currentUser.company_name }}</span>
+        <el-avatar :size="32" style="background:linear-gradient(135deg,#0f78ff,#00d4ff);">{{ currentUser.username.charAt(0).toUpperCase() }}</el-avatar>
+        <el-dropdown @command="handleCommand">
+          <span style="cursor:pointer;">{{ currentUser.username }}<el-icon style="margin-left:4px;"><ArrowDown /></el-icon></span>
+          <template #dropdown><el-dropdown-menu>
+            <el-dropdown-item command="monitor">监管大屏</el-dropdown-item>
+            <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+          </el-dropdown-menu></template>
+        </el-dropdown>
+      </div>
+    </div>
+    <div class="main">
+      <div class="sidebar">
+        <template v-for="(group, gi) in menus" :key="gi">
+          <div class="menu-title">{{ group.title }}</div>
+          <div v-for="m in group.items" :key="m.key" class="menu-item" :class="{active: currentPage===m.key}" @click="navigateTo(m.key)" v-show="!m.roles || m.roles.includes(currentUser.role)">
+            <span class="icon">{{ m.icon }}</span><span>{{ m.label }}</span>
+          </div>
+        </template>
+      </div>
+      <div class="content">
+        <!-- 首页 -->
+        <div v-if="currentPage==='home'">
+          <div class="page-title">工作台概览</div>
+          <div class="page-subtitle">欢迎回来，{{ currentUser.username }}，今天是 {{ today }}</div>
+          <div class="stat-grid">
+            <div class="stat-card"><div class="icon-box bg-blue">🔋</div><div class="label">电池总数</div><div class="value">{{ homeStats.total_batteries || 0 }}</div></div>
+            <div class="stat-card"><div class="icon-box bg-green">🚗</div><div class="label">在线电池</div><div class="value">{{ (homeStats.in_use||0)+(homeStats.installed||0) }}</div><div class="sub">在线率 <b style="color:#15803d;">{{ homeStats.online_rate || 0 }}%</b></div></div>
+            <div class="stat-card"><div class="icon-box bg-orange">⚠️</div><div class="label">故障预警</div><div class="value" style="color:#c2410c;">{{ homeStats.warning_count || 0 }}</div><div class="sub">紧急 {{ homeStats.critical_count || 0 }} 条</div></div>
+            <div class="stat-card"><div class="icon-box bg-purple">♻️</div><div class="label">梯次利用率</div><div class="value">{{ homeStats.cascading_rate || 0 }}%</div></div>
+            <div class="stat-card"><div class="icon-box bg-cyan">🧪</div><div class="label">回收金属</div><div class="value">{{ homeStats.recycled_metals?.total || 0 }} <span style="font-size:14px;">kg</span></div><div class="sub">Li·Co·Ni·Mn</div></div>
+            <div class="stat-card"><div class="icon-box bg-red">🌱</div><div class="label">碳减排量</div><div class="value" style="color:#b91c1c;">{{ homeStats.carbon?.total_saved || 0 }} <span style="font-size:14px;">kgCO₂e</span></div></div>
+          </div>
+          <div class="chart-grid">
+            <div class="chart-box"><div class="chart-title">生命周期状态分布</div><div ref="statusChart" class="chart"></div></div>
+            <div class="chart-box"><div class="chart-title">车企电池分布</div><div ref="automakerChart" class="chart"></div></div>
+            <div class="chart-box"><div class="chart-title">近7天趋势</div><div ref="trendChart" class="chart"></div></div>
+            <div class="chart-box"><div class="chart-title">SOH健康度分布</div><div ref="sohChart" class="chart"></div></div>
+          </div>
+        </div>
+        <!-- 电池管理 -->
+        <div v-if="currentPage==='battery'">
+          <div class="page-title">电池包全生命周期管理</div>
+          <div class="page-subtitle">从出厂编码到回收拆解，完整的电池生命旅程追踪</div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">电池列表</div>
+              <div style="display:flex;gap:8px;">
+                <el-button v-if="currentUser.role==='battery_factory'" type="primary" @click="showCreateBattery=true">新增电池</el-button>
+                <el-button @click="loadBatteries">刷新</el-button>
+              </div>
+            </div>
+            <div class="filter-bar">
+              <el-input v-model="bFilter.keyword" placeholder="搜索编码/车牌/批次" style="width:240px;" clearable @keyup.enter="loadBatteries" />
+              <el-select v-model="bFilter.status" placeholder="状态筛选" style="width:160px;" clearable><el-option v-for="(v,k) in statusMap" :key="k" :label="v" :value="k" /></el-select>
+              <el-select v-model="bFilter.automaker" placeholder="车企" style="width:160px;" clearable><el-option v-for="a in companyList.automakers" :key="a" :label="a" :value="a" /></el-select>
+              <el-select v-model="bFilter.factory" placeholder="电池厂" style="width:160px;" clearable><el-option v-for="a in companyList.factories" :key="a" :label="a" :value="a" /></el-select>
+              <el-button type="primary" @click="loadBatteries">查询</el-button>
+            </div>
+            <el-table :data="batteries.list" stripe>
+              <el-table-column prop="serial_code" label="唯一编码" width="140"><template #default="{row}"><b style="color:#1d4ed8;">{{ row.serial_code }}</b></template></el-table-column>
+              <el-table-column prop="cell_model" label="电芯型号" width="100" />
+              <el-table-column prop="capacity" label="容量" width="90" />
+              <el-table-column prop="production_batch" label="生产批次" width="120" />
+              <el-table-column prop="production_date" label="出厂日期" width="100" />
+              <el-table-column prop="battery_factory" label="电池厂" width="140" show-overflow-tooltip />
+              <el-table-column prop="automaker" label="车企" width="100" show-overflow-tooltip />
+              <el-table-column prop="vehicle_plate" label="车牌" width="90" />
+              <el-table-column label="SOH" width="120"><template #default="{row}"><el-progress :percentage="row.current_soh" :color="sohColor(row.current_soh)" :stroke-width="12" /></template></el-table-column>
+              <el-table-column label="状态" width="100"><template #default="{row}"><span class="tag" :class="'status-tag-'+row.status">{{ row.status_name }}</span></template></el-table-column>
+              <el-table-column label="操作" width="260" fixed="right"><template #default="{row}">
+                <el-button size="small" link type="primary" @click="openBatteryDialog(row)">详情</el-button>
+                <el-button v-if="currentUser.role==='automaker' && row.status==='produced'" size="small" link type="success" @click="installBattery(row)">装车</el-button>
+                <el-button v-if="row.status==='installed'" size="small" link type="success" @click="startUse(row)">启用</el-button>
+                <el-button v-if="row.status==='in_use'" size="small" link type="warning" @click="assessBattery(row)">评估残值</el-button>
+                <el-button v-if="row.status==='scrapped'" size="small" link type="primary" @click="secondLife(row)">梯次利用</el-button>
+              </template></el-table-column>
+            </el-table>
+            <el-pagination v-model:current-page="batteryPage" v-model:page-size="batterySize" layout="total,prev,pager,next,sizes" :total="batteries.total" :page-sizes="[10,20,50]" style="margin-top:16px;justify-content:flex-end;display:flex;" @size-change="loadBatteries" @current-change="loadBatteries" />
+          </div>
+        </div>
+        <!-- BMS监控 -->
+        <div v-if="currentPage==='bms'">
+          <div class="page-title">BMS 实时监控中心</div>
+          <div class="page-subtitle">实时上传电压、温度、SOH数据至云端</div>
+          <div class="card" style="margin-bottom:20px;">
+            <div class="card-header">
+              <div class="card-title">监控电池选择</div>
+              <div>
+                <el-select v-model="selectedBatteryId" placeholder="选择电池" filterable style="width:300px;" @change="loadBMSRealtime">
+                  <el-option v-for="b in bmsBatteryOptions" :key="b.id" :label="b.serial_code + (b.vehicle_plate?' ('+b.vehicle_plate+')':'')" :value="b.id" />
+                </el-select>
+                <el-button style="margin-left:8px;" type="primary" @click="simulateBMS">模拟BMS上传</el-button>
+              </div>
+            </div>
+            <div class="stat-grid" style="margin-bottom:8px;">
+              <div class="stat-card"><div class="icon-box bg-blue">⚡</div><div class="label">总电压</div><div class="value" style="font-size:24px;">{{ bmsRealtime.latest?.voltage || '--' }} <span style="font-size:14px;">V</span></div></div>
+              <div class="stat-card"><div class="icon-box bg-orange">🌡️</div><div class="label">温度</div><div class="value" style="font-size:24px;" :style="{color:(bmsRealtime.latest?.temperature||0)>40?'#b91c1c':''}">{{ bmsRealtime.latest?.temperature || '--' }} ℃</div></div>
+              <div class="stat-card"><div class="icon-box bg-cyan">🔋</div><div class="label">SOC</div><div class="value" style="font-size:24px;">{{ bmsRealtime.latest?.soc || '--' }}%</div></div>
+              <div class="stat-card"><div class="icon-box bg-green">💚</div><div class="label">SOH</div><div class="value" style="font-size:24px;">{{ bmsRealtime.latest?.soh || '--' }}%</div></div>
+            </div>
+            <div v-if="bmsRealtime.latest?.is_abnormal" style="padding:12px 18px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#b91c1c;display:flex;align-items:center;gap:10px;">
+              <el-icon :size="20"><WarningFilled /></el-icon><span><b>异常预警：</b>{{ bmsRealtime.latest.warning_type || '电池状态异常' }}</span>
+            </div>
+          </div>
+          <div class="chart-grid">
+            <div class="chart-box"><div class="chart-title">温度趋势（24h）</div><div ref="tempChart" class="chart"></div></div>
+            <div class="chart-box"><div class="chart-title">电压/SOC趋势</div><div ref="voltChart" class="chart"></div></div>
+            <div class="chart-box"><div class="chart-title">电芯温度云图</div><div ref="cellTempChart" class="chart"></div></div>
+            <div class="chart-box"><div class="chart-title">电芯电压分布</div><div ref="cellVoltChart" class="chart"></div></div>
+          </div>
+          <div class="card" style="margin-top:18px;">
+            <div class="card-header"><div class="card-title">故障预警列表</div><el-button type="danger" link @click="loadWarnings">刷新</el-button></div>
+            <el-table :data="warnings.list" stripe size="default">
+              <el-table-column prop="record_time" label="时间" width="170" />
+              <el-table-column prop="serial_code" label="电池编码" width="140" />
+              <el-table-column prop="voltage" label="V" width="80" />
+              <el-table-column prop="temperature" label="℃" width="90"><template #default="{row}"><span :style="{color:row.temperature>40?'#b91c1c':''}">{{ row.temperature }}</span></template></el-table-column>
+              <el-table-column prop="soc" label="SOC" width="80" />
+              <el-table-column prop="soh" label="SOH" width="80" />
+              <el-table-column label="级别" width="100"><template #default="{row}"><span v-if="row.warning_type?.includes('紧急')" class="tag tag-red">紧急</span><span v-else class="tag tag-orange">预警</span></template></el-table-column>
+              <el-table-column prop="warning_type" label="预警内容" show-overflow-tooltip />
+            </el-table>
+          </div>
+        </div>
+        <!-- 充电管理 -->
+        <div v-if="currentPage==='charging'">
+          <div class="page-title">智能充电策略管理</div>
+          <div class="page-subtitle">动态调整充电策略，异常发热自动断电预警</div>
+          <div class="stat-grid">
+            <div class="stat-card"><div class="icon-box bg-blue">⚡</div><div class="label">充电次数</div><div class="value">{{ chargingStats.total_charging || 0 }}</div></div>
+            <div class="stat-card"><div class="icon-box bg-red">🔥</div><div class="label">异常预警</div><div class="value" style="color:#b91c1c;">{{ chargingStats.alerted_count || 0 }}</div></div>
+            <div class="stat-card"><div class="icon-box bg-green">📊</div><div class="label">平均功率</div><div class="value">{{ chargingStats.avg_power || 0 }} kW</div></div>
+            <div class="stat-card"><div class="icon-box bg-purple">🎯</div><div class="label">策略数量</div><div class="value">{{ (chargingStats.strategy_distribution||[]).length }}</div></div>
+          </div>
+          <div class="card" style="margin-bottom:18px;">
+            <div class="card-header"><div class="card-title">充电控制</div><div>
+              <el-select v-model="chargingSerialCode" placeholder="选择电池编码" filterable style="width:260px;">
+                <el-option v-for="b in chargingBatteryOptions" :key="b.serial_code" :label="b.serial_code+(b.vehicle_plate?' ('+b.vehicle_plate+')':'')" :value="b.serial_code" />
+              </el-select>
+              <el-button style="margin-left:10px;" type="primary" @click="startCharging">开始充电</el-button>
+            </div></div>
+            <div v-if="currentCharging" style="padding:14px;background:linear-gradient(90deg,#eff6ff,#ecfeff);border-radius:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-weight:600;color:#1d4ed8;">⚡ 充电中 · {{ currentCharging.serial_code }} · {{ currentCharging.vehicle_plate }}</div>
+                  <div style="margin-top:6px;color:#0e7490;">策略：{{ currentCharging.charging_strategy }}</div>
+                  <div style="margin-top:6px;color:#64748b;font-size:13px;">功率 {{ currentCharging.charging_power }}kW · 起始SOC {{ currentCharging.start_soc }}%</div>
+                </div>
+                <el-button type="danger" @click="stopCharging">结束充电</el-button>
+              </div>
+            </div>
+          </div>
+          <div class="chart-grid" style="margin-bottom:18px;">
+            <div class="chart-box"><div class="chart-title">充电策略分布</div><div ref="strategyChart" class="chart"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">充电记录</div></div>
+            <div class="filter-bar">
+              <el-input v-model="cFilter.serial_code" placeholder="搜索编码" style="width:220px;" clearable @keyup.enter="loadCharging" />
+              <el-button type="primary" @click="loadCharging">查询</el-button>
+            </div>
+            <el-table :data="chargingRecords.list" stripe>
+              <el-table-column prop="serial_code" label="编码" width="130" />
+              <el-table-column prop="vehicle_plate" label="车牌" width="100" />
+              <el-table-column prop="charging_strategy" label="策略" width="200" show-overflow-tooltip />
+              <el-table-column prop="charging_power" label="kW" width="80" />
+              <el-table-column label="SOC" width="110"><template #default="{row}">{{ row.start_soc }}% → {{ row.end_soc || '--' }}%</template></el-table-column>
+              <el-table-column prop="max_temperature" label="℃" width="90"><template #default="{row}"><span :style="{color:row.max_temperature>42?'#b91c1c':''}">{{ row.max_temperature }}</span></template></el-table-column>
+              <el-table-column label="预警" width="80"><template #default="{row}"><span v-if="row.is_alerted" class="tag tag-red">预警</span><span v-else class="tag tag-green">正常</span></template></el-table-column>
+              <el-table-column prop="alert_message" label="预警消息" show-overflow-tooltip />
+              <el-table-column prop="start_time" label="时间" width="150" />
+            </el-table>
+          </div>
+        </div>
+        <!-- 残值评估 -->
+        <div v-if="currentPage==='assessment'">
+          <div class="page-title">报废电池残值评估与梯次利用</div>
+          <div class="page-subtitle">根据SOH自动评估，推荐场景（储能/低速车/拆解）</div>
+          <div class="stat-grid">
+            <div class="stat-card"><div class="icon-box bg-purple">♻️</div><div class="label">已评估数</div><div class="value">{{ assessCount }}</div></div>
+            <div class="stat-card"><div class="icon-box bg-green">⚡</div><div class="label">储能电站</div><div class="value">{{ countScenario('储能') }}</div><div class="sub">SOH ≥ 60%</div></div>
+            <div class="stat-card"><div class="icon-box bg-blue">🚜</div><div class="label">低速车辆</div><div class="value">{{ countScenario('低速') }}</div><div class="sub">SOH 40-60%</div></div>
+            <div class="stat-card"><div class="icon-box bg-orange">🧪</div><div class="label">拆解回收</div><div class="value">{{ countScenario('拆解') }}</div><div class="sub">SOH < 40%</div></div>
+          </div>
+          <div class="chart-grid">
+            <div class="chart-box"><div class="chart-title">梯次利用场景分布</div><div ref="scenarioChart" class="chart"></div></div>
+          </div>
+          <div class="card" style="margin-top:18px;">
+            <div class="card-header"><div class="card-title">评估记录</div></div>
+            <el-table :data="assessments.list" stripe>
+              <el-table-column prop="serial_code" label="编码" width="140" />
+              <el-table-column label="SOH" width="130"><template #default="{row}"><el-progress :percentage="row.final_soh" :color="sohColor(row.final_soh)" :stroke-width="12" /></template></el-table-column>
+              <el-table-column label="残值" width="130"><template #default="{row}"><b style="color:#1d4ed8;font-size:16px;">¥{{ row.residual_value }}</b></template></el-table-column>
+              <el-table-column label="推荐场景" width="180"><template #default="{row}"><span class="tag tag-purple">{{ row.recommended_scenario }}</span></template></el-table-column>
+              <el-table-column prop="scenario_detail" label="说明" show-overflow-tooltip />
+              <el-table-column prop="created_at" label="评估时间" width="160" />
+            </el-table>
+          </div>
+        </div>
+        <!-- 回收管理 -->
+        <div v-if="currentPage==='recycling'">
+          <div class="page-title">回收拆解与贵金属提取管理</div>
+          <div class="page-subtitle">扫码入库 → 生成工单 → 记录贵金属提取量</div>
+          <div class="stat-grid">
+            <div class="stat-card"><div class="icon-box bg-blue">📥</div><div class="label">入库总数</div><div class="value">{{ recyclingStats.total_recycled || 0 }}</div><div class="sub">待拆解 {{ recyclingStats.pending || 0 }}</div></div>
+            <div class="stat-card"><div class="icon-box bg-green">✅</div><div class="label">已完成拆解</div><div class="value">{{ recyclingStats.completed || 0 }}</div></div>
+            <div class="stat-card"><div class="icon-box bg-cyan">💎</div><div class="label">金属总量</div><div class="value">{{ recyclingStats.metals?.total || 0 }} kg</div></div>
+            <div class="stat-card"><div class="icon-box bg-orange">🥇</div><div class="label">Li / Co / Ni / Mn</div><div class="sub">Li {{ recyclingStats.metals?.lithium || 0 }} · Co {{ recyclingStats.metals?.cobalt || 0 }}</div><div class="sub">Ni {{ recyclingStats.metals?.nickel || 0 }} · Mn {{ recyclingStats.metals?.manganese || 0 }}</div></div>
+          </div>
+          <div class="card" style="margin-bottom:18px;">
+            <div class="card-header"><div class="card-title">扫码入库与拆解</div><div>
+              <el-input v-model="scanCode" placeholder="扫描/输入电池编码" style="width:260px;" clearable />
+              <el-button style="margin-left:10px;" type="primary" v-if="currentUser.role==='recycler'" @click="scanInbound">扫码入库</el-button>
+            </div></div>
+          </div>
+          <div class="chart-grid" style="margin-bottom:18px;">
+            <div class="chart-box"><div class="chart-title">贵金属提取量分布</div><div ref="metalsChart" class="chart"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">拆解工单</div></div>
+            <div class="filter-bar">
+              <el-select v-model="rFilter.status" placeholder="状态" style="width:160px;" clearable>
+                <el-option label="待拆解" value="pending" /><el-option label="已完成" value="completed" />
+              </el-select>
+              <el-button type="primary" @click="loadRecycling">查询</el-button>
+            </div>
+            <el-table :data="recyclingList.list" stripe>
+              <el-table-column prop="serial_code" label="编码" width="130" />
+              <el-table-column prop="recycler_name" label="回收企业" width="160" />
+              <el-table-column prop="inbound_code" label="入库单" width="120" />
+              <el-table-column prop="disassembly_order" label="工单号" width="120" />
+              <el-table-column label="金属提取量" width="300"><template #default="{row}"><div style="font-size:12px;">Li {{ row.lithium_extracted }} · Co {{ row.cobalt_extracted }} · Ni {{ row.nickel_extracted }} kg</div></template></el-table-column>
+              <el-table-column prop="created_at" label="入库时间" width="150" />
+              <el-table-column label="状态" width="90"><template #default="{row}"><span v-if="row.disassembly_status==='completed'" class="tag tag-green">已完成</span><span v-else class="tag tag-orange">待拆解</span></template></el-table-column>
+              <el-table-column label="操作" width="130"><template #default="{row}">
+                <el-button v-if="row.disassembly_status==='pending' && currentUser.role==='recycler'" size="small" link type="primary" @click="completeDisassembly(row)">完成拆解</el-button>
+              </template></el-table-column>
+            </el-table>
+          </div>
+        </div>
+        <!-- 碳足迹 -->
+        <div v-if="currentPage==='carbon'">
+          <div class="page-title">全生命周期碳足迹核算</div>
+          <div class="page-subtitle">ISO 14067 标准，自动生成合规报告</div>
+          <div class="stat-grid">
+            <div class="stat-card"><div class="icon-box bg-red">🏭</div><div class="label">总碳排放</div><div class="value" style="color:#b91c1c;">{{ carbonStats.total_carbon || 0 }} kg</div></div>
+            <div class="stat-card"><div class="icon-box bg-green">🌳</div><div class="label">碳减排</div><div class="value" style="color:#15803d;">{{ carbonStats.total_saved || 0 }} kg</div><div class="sub">≈ 种树 {{ Math.round((carbonStats.total_saved||0)/18) }} 棵</div></div>
+            <div class="stat-card"><div class="icon-box bg-blue">📈</div><div class="label">核算数量</div><div class="value">{{ carbonStats.count || 0 }}</div></div>
+            <div class="stat-card"><div class="icon-box bg-purple">📊</div><div class="label">单块平均</div><div class="value">{{ carbonStats.avg_carbon_per_unit || 0 }} kg</div></div>
+          </div>
+          <div class="chart-grid" style="margin:18px 0;">
+            <div class="chart-box"><div class="chart-title">碳排放阶段占比（平均）</div><div ref="carbonStageChart" class="chart"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">碳足迹记录</div></div>
+            <div class="filter-bar">
+              <el-input v-model="cfFilter.keyword" placeholder="搜索编码" style="width:220px;" clearable @keyup.enter="loadCarbon" />
+              <el-button type="primary" @click="loadCarbon">查询</el-button>
+            </div>
+            <el-table :data="carbonList.list" stripe>
+              <el-table-column prop="serial_code" label="编码" width="140" />
+              <el-table-column label="生产" width="100"><template #default="{row}">{{ row.production_carbon }}</template></el-table-column>
+              <el-table-column label="运输" width="100"><template #default="{row}">{{ row.transport_carbon }}</template></el-table-column>
+              <el-table-column label="使用" width="100"><template #default="{row}">{{ row.usage_carbon }}</template></el-table-column>
+              <el-table-column label="回收" width="100"><template #default="{row}">{{ row.recycling_carbon }}</template></el-table-column>
+              <el-table-column label="总排放" width="120"><template #default="{row}"><b style="color:#b91c1c;">{{ row.total_carbon }}kg</b></template></el-table-column>
+              <el-table-column label="减排" width="120"><template #default="{row}"><b style="color:#15803d;">{{ row.carbon_saved }}kg</b></template></el-table-column>
+              <el-table-column prop="calculated_at" label="核算时间" width="150" />
+              <el-table-column label="操作" width="180"><template #default="{row}">
+                <el-button size="small" link type="primary" @click="showCarbonReport(row)">合规报告</el-button>
+                <el-button size="small" link type="success" @click="calculateCarbon(row)">重算</el-button>
+              </template></el-table-column>
+            </el-table>
+          </div>
+        </div>
+        <!-- 用户管理 -->
+        <div v-if="currentPage==='users' && currentUser.role==='regulator'">
+          <div class="page-title">系统用户管理</div>
+          <div class="page-subtitle">监管部门专属，用户及角色权限管理</div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px;">用户列表</div>
+            <el-table :data="usersList" stripe>
+              <el-table-column prop="id" label="ID" width="70" />
+              <el-table-column prop="username" label="用户名" width="150" />
+              <el-table-column prop="company_name" label="单位名称" width="250" />
+              <el-table-column label="角色" width="130"><template #default="{row}"><span class="tag tag-blue">{{ row.role_name }}</span></template></el-table-column>
+              <el-table-column prop="created_at" label="创建时间" />
+            </el-table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- 大屏 -->
+  <div v-if="showMonitor" class="monitor-screen">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
+      <el-button @click="showMonitor=false" size="small" plain style="border-color:rgba(96,165,250,.3);color:#93c5fd;">← 返回管理台</el-button>
+    </div>
+    <div class="monitor-title">新 能 源 动 力 电 池 全 生 命 周 期 监 管 中 心</div>
+    <div class="monitor-subtitle">BATTERY LIFECYCLE REGULATORY MONITORING · {{ monitorTime }}</div>
+    <div class="monitor-toolbar">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <span style="color:#93c5fd;font-size:13px;">车企筛选：</span>
+        <el-select v-model="monitorFilter" placeholder="全部车企" style="width:200px;" @change="loadMonitorData">
+          <el-option label="全部车企" value="" />
+          <el-option v-for="a in monitorAutomakers" :key="a" :label="a" :value="a" />
+        </el-select>
+      </div>
+      <div class="time"><el-icon><Timer /></el-icon> {{ currentTime }}</div>
+      <div style="display:flex;gap:14px;font-size:13px;">
+        <span style="color:#94a3b8;">在线</span><span style="color:#4ade80;">●</span>
+        <span style="color:#94a3b8;">预警</span><span style="color:#f59e0b;">●</span>
+        <span style="color:#94a3b8;">紧急</span><span style="color:#f87171;">●</span>
+      </div>
+    </div>
+    <div class="monitor-grid">
+      <div class="monitor-card" style="grid-column:span 3;">
+        <div class="m-title">核心指标</div>
+        <div class="monitor-stat">
+          <div class="monitor-stat-item"><div class="v">{{ monitorData.total_batteries || 0 }}</div><div class="l">电池总数</div></div>
+          <div class="monitor-stat-item"><div class="v" style="color:#4ade80;">{{ monitorData.online_rate || 0 }}%</div><div class="l">在线率</div></div>
+          <div class="monitor-stat-item"><div class="v" style="color:#f59e0b;">{{ monitorData.warning_count || 0 }}</div><div class="l">预警数</div></div>
+          <div class="monitor-stat-item"><div class="v" style="color:#f87171;">{{ monitorData.critical_count || 0 }}</div><div class="l">紧急告警</div></div>
+          <div class="monitor-stat-item"><div class="v" style="color:#a78bfa;">{{ monitorData.cascading_rate || 0 }}%</div><div class="l">梯次利用率</div></div>
+          <div class="monitor-stat-item"><div class="v" style="color:#fbbf24;">{{ monitorData.recycled || 0 }}</div><div class="l">已回收量</div></div>
+        </div>
+      </div>
+      <div class="monitor-card" style="grid-column:span 6;">
+        <div class="m-title">状态分布 / 电池厂分布</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div ref="mStatusChart" class="m-chart"></div>
+          <div ref="mFactoryChart" class="m-chart"></div>
+        </div>
+      </div>
+      <div class="monitor-card" style="grid-column:span 3;">
+        <div class="m-title">SOH健康度分布</div>
+        <div ref="mSohChart" class="m-chart" style="height:220px;"></div>
+      </div>
+      <div class="monitor-card" style="grid-column:span 4;"><div class="m-title">车企电池排行</div><div ref="mAutomakerChart" class="m-chart" style="height:260px;"></div></div>
+      <div class="monitor-card" style="grid-column:span 4;"><div class="m-title">近7天趋势</div><div ref="mTrendChart" class="m-chart" style="height:260px;"></div></div>
+      <div class="monitor-card" style="grid-column:span 4;">
+        <div class="m-title">实时预警事件</div>
+        <div class="monitor-list">
+          <div class="item" v-for="(w,i) in monitorWarnings.slice(0,10)" :key="i"><span>🚨 {{ w.serial_code }}</span><span class="warn">{{ w.warning_type || '异常' }}</span></div>
+          <div v-if="!monitorWarnings.length" style="color:#64748b;text-align:center;padding:20px;">暂无预警</div>
+        </div>
+      </div>
+      <div class="monitor-card" style="grid-column:span 6;"><div class="m-title">碳足迹阶段排放分析</div><div ref="mCarbonChart" class="m-chart" style="height:240px;"></div></div>
+      <div class="monitor-card" style="grid-column:span 3;">
+        <div class="m-title">贵金属提取</div>
+        <div class="monitor-list">
+          <div class="item"><span>锂 (Li)</span><span class="ok">{{ monitorData.recycled_metals?.lithium || 0 }} kg</span></div>
+          <div class="item"><span>钴 (Co)</span><span class="ok">{{ monitorData.recycled_metals?.cobalt || 0 }} kg</span></div>
+          <div class="item"><span>镍 (Ni)</span><span class="ok">{{ monitorData.recycled_metals?.nickel || 0 }} kg</span></div>
+          <div class="item"><span>锰 (Mn)</span><span class="ok">{{ monitorData.recycled_metals?.manganese || 0 }} kg</span></div>
+          <div class="item"><span>其他</span><span class="ok">{{ monitorData.recycled_metals?.other || 0 }} kg</span></div>
+          <div class="item" style="border-top:1px solid rgba(148,163,184,.2);padding-top:10px;margin-top:4px;"><b style="color:#93c5fd;">合计</b><b style="color:#22d3ee;">{{ monitorData.recycled_metals?.total || 0 }} kg</b></div>
+        </div>
+      </div>
+      <div class="monitor-card" style="grid-column:span 3;"><div class="m-title">碳排放 / 碳减排</div><div ref="mCarbonBarChart" class="m-chart" style="height:240px;"></div></div>
+    </div>
+  </div>
+  <!-- Dialog: 新增电池 -->
+  <el-dialog v-model="showCreateBattery" title="新增电池包 - 写入唯一编码" width="520px">
+    <el-form :model="createForm" label-width="100px">
+      <el-form-item label="唯一编码" required><el-input v-model="createForm.serial_code" placeholder="例：BT2024000001" /></el-form-item>
+      <el-form-item label="电芯型号" required><el-input v-model="createForm.cell_model" placeholder="例：NCM811" /></el-form-item>
+      <el-form-item label="容量(kWh)" required><el-input-number v-model="createForm.capacity" :min="10" :max="300" style="width:100%;" /></el-form-item>
+      <el-form-item label="生产批次" required><el-input v-model="createForm.production_batch" placeholder="例：BATCH2024-001" /></el-form-item>
+      <el-form-item label="出厂日期" required><el-date-picker v-model="createForm.production_date" type="date" value-format="YYYY-MM-DD" style="width:100%;" /></el-form-item>
+    </el-form>
+    <template #footer><el-button @click="showCreateBattery=false">取消</el-button><el-button type="primary" @click="submitCreateBattery">确认写入</el-button></template>
+  </el-dialog>
+  <!-- Dialog: 装车 -->
+  <el-dialog v-model="showInstallDialog" title="电池装车登记" width="440px">
+    <el-form :model="installForm" label-width="100px">
+      <el-form-item label="电池编码"><el-input v-model="installForm.serial_code" disabled /></el-form-item>
+      <el-form-item label="车牌号" required><el-input v-model="installForm.vehicle_plate" placeholder="例：京A12345" /></el-form-item>
+    </el-form>
+    <template #footer><el-button @click="showInstallDialog=false">取消</el-button><el-button type="primary" @click="submitInstall">确认装车</el-button></template>
+  </el-dialog>
+  <!-- Dialog: 电池详情 -->
+  <el-dialog v-model="showBatteryDetail" title="电池全生命周期详情" width="880px" top="5vh">
+    <el-descriptions :column="3" border v-if="batteryDetail.id">
+      <el-descriptions-item label="唯一编码"><b style="color:#1d4ed8;">{{ batteryDetail.serial_code }}</b></el-descriptions-item>
+      <el-descriptions-item label="电芯型号">{{ batteryDetail.cell_model }}</el-descriptions-item>
+      <el-descriptions-item label="容量">{{ batteryDetail.capacity }} kWh</el-descriptions-item>
+      <el-descriptions-item label="生产批次">{{ batteryDetail.production_batch }}</el-descriptions-item>
+      <el-descriptions-item label="出厂日期">{{ batteryDetail.production_date }}</el-descriptions-item>
+      <el-descriptions-item label="当前状态"><span class="tag" :class="'status-tag-'+batteryDetail.status">{{ batteryDetail.status_name }}</span></el-descriptions-item>
+      <el-descriptions-item label="电池厂">{{ batteryDetail.battery_factory }}</el-descriptions-item>
+      <el-descriptions-item label="车企">{{ batteryDetail.automaker || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="车牌号">{{ batteryDetail.vehicle_plate || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="当前SOH"><el-progress :percentage="batteryDetail.current_soh" :color="sohColor(batteryDetail.current_soh)" :stroke-width="14" /></el-descriptions-item>
+      <el-descriptions-item label="剩余容量">{{ batteryDetail.remaining_capacity }} kWh</el-descriptions-item>
+      <el-descriptions-item label="创建时间">{{ batteryDetail.created_at }}</el-descriptions-item>
+    </el-descriptions>
+    <div class="detail-section" style="margin-top:20px;">
+      <h4 style="font-size:14px;color:#0f172a;margin-bottom:10px;padding-left:10px;border-left:3px solid #0f78ff;">生命周期状态流转</h4>
+      <div class="battery-timeline">
+        <span v-for="(v,k) in statusMap" :key="k" class="step" :class="batteryStatusClass(batteryDetail.status, k)">{{ v }}</span>
+      </div>
+    </div>
+    <div class="detail-section" v-if="batteryDetail.scrap_assessment">
+      <h4 style="font-size:14px;color:#0f172a;margin-bottom:10px;padding-left:10px;border-left:3px solid #0f78ff;">残值评估结果</h4>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="k">最终SOH</div><div class="v">{{ batteryDetail.scrap_assessment.final_soh }}%</div></div>
+        <div class="detail-item"><div class="k">评估残值</div><div class="v" style="color:#1d4ed8;">¥{{ batteryDetail.scrap_assessment.residual_value }}</div></div>
+        <div class="detail-item"><div class="k">推荐场景</div><div class="v" style="color:#7c3aed;">{{ batteryDetail.scrap_assessment.recommended_scenario }}</div></div>
+      </div>
+      <div style="margin-top:10px;padding:10px 14px;background:#faf5ff;border-radius:8px;font-size:13px;color:#7c3aed;">📌 {{ batteryDetail.scrap_assessment.scenario_detail }}</div>
+    </div>
+    <div class="detail-section" v-if="batteryDetail.bms_history?.length">
+      <h4 style="font-size:14px;color:#0f172a;margin-bottom:10px;padding-left:10px;border-left:3px solid #0f78ff;">最近BMS数据（TOP 10）</h4>
+      <el-table :data="batteryDetail.bms_history.slice(0,10)" stripe size="small">
+        <el-table-column prop="record_time" label="时间" width="160" />
+        <el-table-column prop="voltage" label="V" width="70" />
+        <el-table-column prop="temperature" label="℃" width="80"><template #default="{row}"><span :style="{color:row.temperature>40?'#b91c1c':''}">{{ row.temperature }}</span></template></el-table-column>
+        <el-table-column prop="soc" label="SOC" width="70" />
+        <el-table-column prop="soh" label="SOH" width="70" />
+        <el-table-column label="状态" width="80"><template #default="{row}"><span v-if="row.is_abnormal" class="tag tag-red">异常</span><span v-else class="tag tag-green">正常</span></template></el-table-column>
+      </el-table>
+    </div>
+    <template #footer><el-button @click="showBatteryDetail=false">关闭</el-button></template>
+  </el-dialog>
+  <!-- Dialog: 碳报告 -->
+  <el-dialog v-model="showCarbonReportDialog" title="全生命周期碳排放合规报告" width="700px" top="3vh">
+    <div class="pre-wrap" v-if="carbonReport">{{ carbonReport }}</div>
+    <template #footer><el-button @click="showCarbonReportDialog=false">关闭</el-button><el-button type="primary" @click="downloadReport">下载报告</el-button></template>
+  </el-dialog>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
