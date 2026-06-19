@@ -46,7 +46,7 @@ def list_users():
     if not current_user or current_user.role != 'regulator':
         return jsonify({'message': '无权访问', 'code': 403}), 403
     users = User.query.all()
-    return jsonify({'code': 200, 'data': [u.to_dict() for u in users], 'roles': ROLES})
+    return jsonify({'code': 200, 'data': {'list': [u.to_dict() for u in users], 'roles': ROLES}})
 
 @auth_bp.route('/roles', methods=['GET'])
 def get_roles():

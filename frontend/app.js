@@ -40,7 +40,10 @@ const app = createApp({
       ]},
     ];
 
-    // ==================== Axios 封装 ====================
+    // ==================== Axios ====================
+    // axiosInst interceptor returns r.data => resolved value is {code, data, message}
+    // So for axiosInst calls: r = {code, data, message}, use r.data to get payload
+    // For raw axios.post (login only): r = AxiosResponse, use r.data to get {code, data, message}
     const axiosInst = axios.create({ baseURL: API, timeout: 30000 });
     axiosInst.interceptors.request.use(c => {
       if (token.value) c.headers.Authorization = 'Bearer ' + token.value;
@@ -62,8 +65,10 @@ const app = createApp({
         return;
       }
       loginLoading.value = true;
+      // Login uses raw axios, so r.data = {code, data:{token, user}}
       axios.post(API + '/auth/login', loginForm).then(r => {
-        const d = r.data.data;
+        const resp = r.data;
+        const d = resp.data;
         token.value = d.token;
         localStorage.setItem('token', d.token);
         Object.assign(currentUser, d.user);
@@ -102,28 +107,28 @@ const app = createApp({
       });
     }
 
-    // ==================== 图表实例管理 ====================
+    // ==================== Chart helpers ====================
     const charts = {};
-    function getChart(refName, key, dark) {
-      const el = typeof refName === 'string' ? document.querySelector('[ref="' + refName + '"]') : refName;
-      if (!el) return null;
-      if (!charts[key]) charts[key] = echarts.init(el, dark ? 'dark' : null);
-      else charts[key].resize();
-      return charts[key];
-    }
-    function resizeCharts() { Object.values(charts).forEach(c => c && c.resize()); }
+    function resizeCharts() { Object.values(charts).forEach(c => c && c.resize && c.resize()); }
     window.addEventListener('resize', resizeCharts);
 
+    function initChart(domRef, key, opts) {
+      const el = typeof domRef === 'string' ? document.querySelector('[ref="' + domRef + '"]') : domRef;
+      if (!el) return null;
+      if (charts[key]) { try { charts[key].dispose(); } catch(e){} delete charts[key]; }
+      charts[key] = echarts.init(el, opts || null);
+      return charts[key];
+    }
+
     watch(showMonitor, v => {
-      if (v) { nextTick(() => { loadMonitorData(); loadMonitorCharts(); }); }
+      if (v) { nextTick(() => { loadMonitorData(); }); }
       else {
         ['mStatusChart','mFactoryChart','mSohChart','mAutomakerChart','mTrendChart','mCarbonChart','mCarbonBarChart'].forEach(k => {
-          if (charts[k]) { charts[k].dispose(); delete charts[k]; }
+          if (charts[k]) { try { charts[k].dispose(); } catch(e){} delete charts[k]; }
         });
       }
     });
 
-    // ==================== SOH 颜色 ====================
     function sohColor(v) {
       if (v >= 90) return '#15803d';
       if (v >= 80) return '#65a30d';
@@ -137,9 +142,9 @@ const app = createApp({
     async function loadHome() {
       try {
         const r = await axiosInst.get('/dashboard/overview');
-        Object.assign(homeStats, r.data.data);
+        Object.assign(homeStats, r.data);
         nextTick(() => renderHomeCharts());
-      } catch(e) {}
+      } catch(e) { console.error('loadHome error', e); }
     }
     async function renderHomeCharts() {
       const [r1, r2, r3, r4] = await Promise.all([
@@ -149,52 +154,49 @@ const app = createApp({
         axiosInst.get('/dashboard/soh-distribution'),
       ]);
 
-      const c1 = echarts.init(document.querySelector('[ref="statusChart"]'));
-      charts.statusChart = c1;
-      c1.setOption({
+      const d1 = r1.data;
+      const c1 = initChart('statusChart', 'statusChart');
+      if (c1) c1.setOption({
         tooltip: { trigger: 'item' },
         legend: { bottom: 0, type: 'scroll' },
         series: [{ type: 'pie', radius: ['40%', '70%'], avoidLabelOverlap: false, itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
           label: { show: true, formatter: '{b}\n{c} ({d}%)' },
-          data: r1.data.data.labels.map((l,i) => ({ name: l, value: r1.data.data.values[i], itemStyle: { color: ['#94a3b8','#3b82f6','#22c55e','#f97316','#a855f7','#06b6d4'][i] } })) }]
+          data: d1.labels.map((l,i) => ({ name: l, value: d1.values[i], itemStyle: { color: ['#94a3b8','#3b82f6','#22c55e','#f97316','#a855f7','#06b6d4'][i] } })) }]
       });
 
-      const c2 = echarts.init(document.querySelector('[ref="automakerChart"]'));
-      charts.automakerChart = c2;
-      const autoData = r2.data.data;
-      c2.setOption({
+      const d2 = r2.data;
+      const c2 = initChart('automakerChart', 'automakerChart');
+      if (c2) c2.setOption({
         tooltip: {},
         grid: { left: 80, right: 20, top: 20, bottom: 30 },
         xAxis: { type: 'value' },
-        yAxis: { type: 'category', data: autoData.map(d => d.automaker), axisLabel: { width: 100, overflow: 'truncate' } },
-        series: [{ type: 'bar', data: autoData.map(d => d.count), barWidth: 22, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#60a5fa'},{offset:1,color:'#22d3ee'}]), borderRadius: [0,6,6,0] }, label: { show: true, position: 'right' } }]
+        yAxis: { type: 'category', data: d2.map(d => d.automaker), axisLabel: { width: 100, overflow: 'truncate' } },
+        series: [{ type: 'bar', data: d2.map(d => d.count), barWidth: 22, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#60a5fa'},{offset:1,color:'#22d3ee'}]), borderRadius: [0,6,6,0] }, label: { show: true, position: 'right' } }]
       });
 
-      const c3 = echarts.init(document.querySelector('[ref="trendChart"]'));
-      charts.trendChart = c3;
-      const td = r3.data.data;
-      c3.setOption({
+      const d3 = r3.data;
+      const c3 = initChart('trendChart', 'trendChart');
+      if (c3) c3.setOption({
         tooltip: { trigger: 'axis' },
         legend: { top: 0, data: ['新增电池', '已回收', '故障预警'] },
         grid: { left: 40, right: 20, top: 40, bottom: 30 },
-        xAxis: { type: 'category', data: td.labels },
+        xAxis: { type: 'category', data: d3.labels },
         yAxis: { type: 'value' },
         series: [
-          { name: '新增电池', type: 'line', smooth: true, data: td.new_batteries, areaStyle: { opacity: 0.15 }, itemStyle: { color: '#3b82f6' } },
-          { name: '已回收', type: 'line', smooth: true, data: td.recycled, areaStyle: { opacity: 0.15 }, itemStyle: { color: '#22c55e' } },
-          { name: '故障预警', type: 'bar', data: td.warnings, itemStyle: { color: '#f97316' }, barWidth: 14 },
+          { name: '新增电池', type: 'line', smooth: true, data: d3.new_batteries, areaStyle: { opacity: 0.15 }, itemStyle: { color: '#3b82f6' } },
+          { name: '已回收', type: 'line', smooth: true, data: d3.recycled, areaStyle: { opacity: 0.15 }, itemStyle: { color: '#22c55e' } },
+          { name: '故障预警', type: 'bar', data: d3.warnings, itemStyle: { color: '#f97316' }, barWidth: 14 },
         ]
       });
 
-      const c4 = echarts.init(document.querySelector('[ref="sohChart"]'));
-      charts.sohChart = c4;
-      const sd = r4.data.data;
-      c4.setOption({
+      const d4 = r4.data;
+      const c4 = initChart('sohChart', 'sohChart');
+      if (c4) c4.setOption({
         tooltip: { trigger: 'item' },
-        xAxis: { type: 'category', data: sd.map(s => s.label.split(' ')[0]), axisLabel: { interval: 0, rotate: 20 } },
+        xAxis: { type: 'category', data: d4.map(s => s.label.split(' ')[0]), axisLabel: { interval: 0, rotate: 20 } },
         yAxis: { type: 'value' },
         grid: { left: 40, right: 20, top: 20, bottom: 60 },
-        series: [{ type: 'bar', data: sd.map((s,i) => ({ value: s.value, itemStyle: { color: ['#15803d','#65a30d','#ca8a04','#ea580c','#dc2626'][i] } })), barWidth: 36, label: { show: true, position: 'top' } }]
+        series: [{ type: 'bar', data: d4.map((s,i) => ({ value: s.value, itemStyle: { color: ['#15803d','#65a30d','#ca8a04','#ea580c','#dc2626'][i] } })), barWidth: 36, label: { show: true, position: 'top' } }]
       });
     }
 
@@ -218,14 +220,14 @@ const app = createApp({
     async function loadCompanies() {
       try {
         const r = await axiosInst.get('/battery/automakers');
-        Object.assign(companyList, r.data.data);
+        Object.assign(companyList, r.data);
       } catch(e) {}
     }
     async function loadBatteries() {
       try {
         const params = { page: batteryPage.value, page_size: batterySize.value, ...bFilter };
         const r = await axiosInst.get('/battery/list', { params });
-        Object.assign(batteries, r.data.data);
+        Object.assign(batteries, r.data);
       } catch(e) {}
     }
     async function submitCreateBattery() {
@@ -248,34 +250,34 @@ const app = createApp({
         ElementPlus.ElMessage.success('装车成功');
         showInstallDialog.value = false;
         loadBatteries();
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
     async function startUse(row) {
       try {
         await axiosInst.post(`/battery/${row.id}/start-use`);
         ElementPlus.ElMessage.success('已启用');
         loadBatteries();
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
     async function assessBattery(row) {
       try {
-        ElementPlus.ElMessageBox.confirm(`确认评估电池 ${row.serial_code} 残值？SOH：${row.current_soh}%`, '残值评估确认', { type: 'warning' });
+        await ElementPlus.ElMessageBox.confirm(`确认评估电池 ${row.serial_code} 残值？SOH：${row.current_soh}%`, '残值评估确认', { type: 'warning' });
         await axiosInst.post(`/battery/${row.id}/assess`);
         ElementPlus.ElMessage.success('残值评估完成');
         loadBatteries();
-      } catch(e) { if (e !== 'cancel') ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { if (e !== 'cancel') ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
     async function secondLife(row) {
       try {
         await axiosInst.post(`/battery/${row.id}/second-life`);
         ElementPlus.ElMessage.success('已转为梯次利用');
         loadBatteries();
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
     async function openBatteryDialog(row) {
       try {
         const r = await axiosInst.get(`/battery/${row.id}`);
-        Object.assign(batteryDetail, r.data.data);
+        Object.assign(batteryDetail, r.data);
         showBatteryDetail.value = true;
       } catch(e) {}
     }
@@ -296,9 +298,11 @@ const app = createApp({
     async function loadBMSPage() {
       try {
         const r = await axiosInst.get('/battery/list', { params: { page: 1, page_size: 200 } });
-        bmsBatteryOptions.value = r.data.data.list.filter(b => ['installed','in_use'].includes(b.status));
-        if (bmsBatteryOptions.value.length && !selectedBatteryId.value) {
-          selectedBatteryId.value = bmsBatteryOptions.value[0].id;
+        bmsBatteryOptions.value = r.data.list.filter(b => ['installed','in_use'].includes(b.status));
+        if (bmsBatteryOptions.value.length) {
+          if (!selectedBatteryId.value || !bmsBatteryOptions.value.find(b => b.id === selectedBatteryId.value)) {
+            selectedBatteryId.value = bmsBatteryOptions.value[0].id;
+          }
           loadBMSRealtime();
         }
       } catch(e) {}
@@ -307,8 +311,8 @@ const app = createApp({
     async function loadBMSRealtime() {
       if (!selectedBatteryId.value) return;
       try {
-        const r = await axiosInst.get(`/bms/realtime/${selectedBatteryId.value}?hours=24`);
-        Object.assign(bmsRealtime, r.data.data);
+        const r = await axiosInst.get(`/bms/realtime/${selectedBatteryId.value}?hours=720`);
+        Object.assign(bmsRealtime, r.data);
         nextTick(renderBMSCharts);
       } catch(e) {}
     }
@@ -319,22 +323,21 @@ const app = createApp({
         ElementPlus.ElMessage.success('模拟上传完成');
         loadBMSRealtime();
         loadWarnings();
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
     async function loadWarnings() {
       try {
         const r = await axiosInst.get('/bms/warnings', { params: { page: 1, page_size: 50 } });
-        Object.assign(warnings, r.data.data);
+        Object.assign(warnings, r.data);
       } catch(e) {}
     }
     function renderBMSCharts() {
       const hist = bmsRealtime.history || [];
       const times = hist.map(h => h.record_time.slice(11,16));
-      if (times.length > 50) { const step = Math.ceil(times.length/50); for (let i=0;i<hist.length;i++) if (i%step) { times[i]=''; } }
+      if (times.length > 50) { const step = Math.ceil(times.length/50); for (let i=0;i<hist.length;i++) if (i%step) times[i]=''; }
 
-      const c1 = echarts.init(document.querySelector('[ref="tempChart"]'));
-      charts.tempChart = c1;
-      c1.setOption({
+      const c1 = initChart('tempChart', 'tempChart');
+      if (c1) c1.setOption({
         tooltip: { trigger: 'axis' },
         grid: { left: 40, right: 20, top: 30, bottom: 40 },
         xAxis: { type: 'category', data: times, axisLabel: { rotate: 30 } },
@@ -347,9 +350,8 @@ const app = createApp({
         ]
       });
 
-      const c2 = echarts.init(document.querySelector('[ref="voltChart"]'));
-      charts.voltChart = c2;
-      c2.setOption({
+      const c2 = initChart('voltChart', 'voltChart');
+      if (c2) c2.setOption({
         tooltip: { trigger: 'axis' },
         legend: { top: 0, data: ['电压','SOC'] },
         grid: { left: 40, right: 50, top: 40, bottom: 40 },
@@ -371,29 +373,29 @@ const app = createApp({
       if (!cellTemps.length) cellTemps = Array.from({length:96}, () => 28 + Math.random()*8);
       if (!cellVolts.length) cellVolts = Array.from({length:96}, () => 3.5 + Math.random()*0.5);
 
-      const c3 = echarts.init(document.querySelector('[ref="cellTempChart"]'));
-      charts.cellTempChart = c3;
-      const rows = 8, cols = 12;
-      const tempData = [];
-      for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) { const idx = r*cols+c; tempData.push([c, rows-1-r, cellTemps[idx] || 30]); }
-      c3.setOption({
-        tooltip: { formatter: p => `电芯[${p.data[1]+1},${p.data[0]+1}]<br/>温度: ${p.data[2]}℃` },
-        grid: { left: 20, right: 20, top: 20, bottom: 30 },
-        xAxis: { type: 'category', data: Array.from({length:cols},(_,i)=>i+1), splitArea: { show: true } },
-        yAxis: { type: 'category', data: Array.from({length:rows},(_,i)=>rows-i), splitArea: { show: true } },
-        visualMap: { min: 22, max: 48, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, inRange: { color: ['#1d4ed8','#22c55e','#eab308','#f97316','#dc2626'] } },
-        series: [{ type: 'heatmap', data: tempData, label: { show: false }, itemStyle: { borderColor: '#fff', borderWidth: 1 } }]
-      });
+      const c3 = initChart('cellTempChart', 'cellTempChart');
+      if (c3) {
+        const rows = 8, cols = 12;
+        const tempData = [];
+        for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) { const idx = r*cols+c; tempData.push([c, rows-1-r, cellTemps[idx] || 30]); }
+        c3.setOption({
+          tooltip: { formatter: p => `电芯[${p.data[1]+1},${p.data[0]+1}]<br/>温度: ${p.data[2]}℃` },
+          grid: { left: 20, right: 20, top: 20, bottom: 30 },
+          xAxis: { type: 'category', data: Array.from({length:cols},(_,i)=>i+1), splitArea: { show: true } },
+          yAxis: { type: 'category', data: Array.from({length:rows},(_,i)=>rows-i), splitArea: { show: true } },
+          visualMap: { min: 22, max: 48, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, inRange: { color: ['#1d4ed8','#22c55e','#eab308','#f97316','#dc2626'] } },
+          series: [{ type: 'heatmap', data: tempData, label: { show: false }, itemStyle: { borderColor: '#fff', borderWidth: 1 } }]
+        });
+      }
 
-      const c4 = echarts.init(document.querySelector('[ref="cellVoltChart"]'));
-      charts.cellVoltChart = c4;
-      c4.setOption({
+      const c4 = initChart('cellVoltChart', 'cellVoltChart');
+      if (c4) c4.setOption({
         tooltip: { trigger: 'axis' },
         grid: { left: 40, right: 20, top: 20, bottom: 40 },
         xAxis: { type: 'category', data: Array.from({length:cellVolts.length},(_,i)=>i+1), name: '电芯编号' },
         yAxis: { type: 'value', name: 'V' },
         dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', height: 20, bottom: 5 }],
-        series: [{ type: 'scatter', data: cellVolts, symbolSize: 8, itemStyle: { color: p => p.value[1] > 4.15 ? '#dc2626' : (p.value[1] < 3.3 ? '#3b82f6' : '#22c55e') },
+        series: [{ type: 'scatter', data: cellVolts.map((v,i) => [i+1, v]), symbolSize: 8, itemStyle: { color: p => p.value[1] > 4.15 ? '#dc2626' : (p.value[1] < 3.3 ? '#3b82f6' : '#22c55e') },
           markLine: { data: [{ yAxis: 4.2, name: '上限', lineStyle: { color: '#dc2626' } }, { yAxis: 3.2, name: '下限', lineStyle: { color: '#3b82f6' } }] }
         }]
       });
@@ -413,8 +415,8 @@ const app = createApp({
           axiosInst.get('/charging/stats'),
           axiosInst.get('/battery/list', { params: { page: 1, page_size: 200 } })
         ]);
-        Object.assign(chargingStats, s1.data.data);
-        chargingBatteryOptions.value = s2.data.data.list.filter(b => b.status === 'in_use');
+        Object.assign(chargingStats, s1.data);
+        chargingBatteryOptions.value = s2.data.list.filter(b => b.status === 'in_use');
       } catch(e) {}
       loadCharging();
       nextTick(renderChargingCharts);
@@ -423,14 +425,14 @@ const app = createApp({
       try {
         const params = { page: 1, page_size: 50, ...cFilter };
         const r = await axiosInst.get('/charging/list', { params });
-        Object.assign(chargingRecords, r.data.data);
+        Object.assign(chargingRecords, r.data);
       } catch(e) {}
     }
     function renderChargingCharts() {
       const sd = chargingStats.strategy_distribution || [];
       if (!sd.length) return;
-      const c = echarts.init(document.querySelector('[ref="strategyChart"]'));
-      charts.strategyChart = c;
+      const c = initChart('strategyChart', 'strategyChart');
+      if (!c) return;
       c.setOption({
         tooltip: { trigger: 'item' },
         legend: { bottom: 0, type: 'scroll' },
@@ -444,19 +446,19 @@ const app = createApp({
       if (!chargingSerialCode.value) { ElementPlus.ElMessage.warning('请选择电池'); return; }
       try {
         const r = await axiosInst.post('/charging/start', { serial_code: chargingSerialCode.value });
-        Object.assign(currentCharging, r.data.data);
-        ElementPlus.ElMessage.success(r.data.message);
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+        currentCharging.value = r.data;
+        ElementPlus.ElMessage.success(r.message || '充电已开始');
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
     async function stopCharging() {
       if (!currentCharging.value) return;
       try {
         const r = await axiosInst.post(`/charging/stop/${currentCharging.value.id}`);
-        ElementPlus.ElMessage.success(r.data.message);
-        if (r.data.data.is_alerted) ElementPlus.ElNotification({ title: '异常发热预警', message: r.data.data.alert_message, type: 'warning' });
+        ElementPlus.ElMessage.success(r.message || '充电已结束');
+        if (r.data && r.data.is_alerted) ElementPlus.ElNotification({ title: '异常发热预警', message: r.data.alert_message, type: 'warning' });
         currentCharging.value = null;
         loadChargingPage();
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
 
     // ==================== 残值评估 ====================
@@ -475,14 +477,14 @@ const app = createApp({
     async function loadAssessments() {
       try {
         const r = await axiosInst.get('/recycling/assessments', { params: { page: 1, page_size: 100 } });
-        Object.assign(assessments, r.data.data);
+        Object.assign(assessments, r.data);
       } catch(e) {}
     }
     function renderAssessmentCharts() {
       const sd = recyclingStats.scenario_distribution || [];
       if (!sd.length) return;
-      const c = echarts.init(document.querySelector('[ref="scenarioChart"]'));
-      charts.scenarioChart = c;
+      const c = initChart('scenarioChart', 'scenarioChart');
+      if (!c) return;
       c.setOption({
         tooltip: { trigger: 'axis' },
         legend: { top: 0 },
@@ -504,13 +506,13 @@ const app = createApp({
       nextTick(renderRecyclingCharts);
     }
     async function loadRecyclingStats() {
-      try { const r = await axiosInst.get('/recycling/stats'); Object.assign(recyclingStats, r.data.data); } catch(e) {}
+      try { const r = await axiosInst.get('/recycling/stats'); Object.assign(recyclingStats, r.data); } catch(e) {}
     }
     async function loadRecycling() {
       try {
         const params = { page: 1, page_size: 50, ...rFilter };
         const r = await axiosInst.get('/recycling/list', { params });
-        Object.assign(recyclingList, r.data.data);
+        Object.assign(recyclingList, r.data);
       } catch(e) {}
     }
     function renderRecyclingCharts() {
@@ -522,8 +524,8 @@ const app = createApp({
         { name: '锰 Mn', value: m.manganese || 0, color: '#f97316' },
         { name: '其他', value: m.other || 0, color: '#64748b' },
       ];
-      const c = echarts.init(document.querySelector('[ref="metalsChart"]'));
-      charts.metalsChart = c;
+      const c = initChart('metalsChart', 'metalsChart');
+      if (!c) return;
       c.setOption({
         tooltip: { trigger: 'item', formatter: '{b}: {c} kg ({d}%)' },
         legend: { top: 0, type: 'scroll' },
@@ -538,17 +540,17 @@ const app = createApp({
       if (!scanCode.value) { ElementPlus.ElMessage.warning('请输入电池编码'); return; }
       try {
         const r = await axiosInst.post('/recycling/scan-inbound', { serial_code: scanCode.value });
-        ElementPlus.ElMessage.success(r.data.message);
+        ElementPlus.ElMessage.success(r.message || '入库成功');
         scanCode.value = '';
         loadRecyclingPage();
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
     async function completeDisassembly(row) {
       try {
         const r = await axiosInst.post(`/recycling/complete/${row.id}`);
-        ElementPlus.ElMessage.success(r.data.message);
+        ElementPlus.ElMessage.success(r.message || '拆解完成');
         loadRecyclingPage();
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
 
     // ==================== 碳足迹 ====================
@@ -562,7 +564,7 @@ const app = createApp({
     async function loadCarbonPage() {
       try {
         const r = await axiosInst.get('/carbon/stats');
-        Object.assign(carbonStats, r.data.data);
+        Object.assign(carbonStats, r.data);
       } catch(e) {}
       loadCarbon();
       nextTick(renderCarbonCharts);
@@ -571,7 +573,7 @@ const app = createApp({
       try {
         const params = { page: 1, page_size: 50, ...cfFilter };
         const r = await axiosInst.get('/carbon/list', { params });
-        Object.assign(carbonList, r.data.data);
+        Object.assign(carbonList, r.data);
       } catch(e) {}
     }
     function renderCarbonCharts() {
@@ -582,8 +584,8 @@ const app = createApp({
         { name: '使用', value: s.usage || 0, color: '#eab308' },
         { name: '回收', value: s.recycling || 0, color: '#22c55e' },
       ];
-      const c = echarts.init(document.querySelector('[ref="carbonStageChart"]'));
-      charts.carbonStageChart = c;
+      const c = initChart('carbonStageChart', 'carbonStageChart');
+      if (!c) return;
       c.setOption({
         tooltip: { trigger: 'item' },
         legend: { top: 0 },
@@ -601,10 +603,10 @@ const app = createApp({
     async function calculateCarbon(row) {
       try {
         const r = await axiosInst.post(`/carbon/calculate/${row.battery_id}`);
-        ElementPlus.ElMessage.success(r.data.message);
-        showCarbonReport(r.data.data);
+        ElementPlus.ElMessage.success(r.message || '核算完成');
+        showCarbonReport(r.data);
         loadCarbon();
-      } catch(e) { ElementPlus.ElMessage.error(e.message); }
+      } catch(e) { ElementPlus.ElMessage.error(e.message || '操作失败'); }
     }
     function downloadReport() {
       if (!reportContext) return;
@@ -618,11 +620,14 @@ const app = createApp({
     // ==================== 用户管理 ====================
     const usersList = ref([]);
     async function loadUsers() {
-      try { const r = await axiosInst.get('/auth/users'); usersList.value = r.data.data.list || []; } catch(e) {}
+      try {
+        const r = await axiosInst.get('/auth/users');
+        usersList.value = r.data.list || [];
+      } catch(e) {}
     }
 
     // ==================== 监管大屏 ====================
-    const monitorData = reactive({ recycled_metals: {} });
+    const monitorData = reactive({ recycled_metals: {}, carbon: {} });
     const monitorWarnings = ref([]);
     const monitorFilter = ref('');
     const monitorAutomakers = ref([]);
@@ -642,132 +647,129 @@ const app = createApp({
       try {
         const params = monitorFilter.value ? { automaker: monitorFilter.value } : {};
         if (!monitorAutomakers.value.length) {
-          try { const ar = await axiosInst.get('/dashboard/automakers'); monitorAutomakers.value = ar.data.data; } catch(e) {}
+          try { const ar = await axiosInst.get('/dashboard/automakers'); monitorAutomakers.value = ar.data; } catch(e) {}
         }
         const [o, w] = await Promise.all([
           axiosInst.get('/dashboard/overview', { params }),
           axiosInst.get('/dashboard/warnings-realtime', { params })
         ]);
-        Object.assign(monitorData, o.data.data);
-        monitorWarnings.value = w.data.data;
+        Object.assign(monitorData, o.data);
+        monitorWarnings.value = w.data;
         nextTick(loadMonitorCharts);
       } catch(e) {}
     }
 
-    function loadMonitorCharts() {
-      const dark = { backgroundColor: 'transparent', textStyle: { color: '#cbd5e1' } };
-      Promise.all([
-        axiosInst.get('/dashboard/status-chart', monitorFilter.value ? { params: { automaker: monitorFilter.value } } : {}),
-        axiosInst.get('/dashboard/factory-chart'),
-        axiosInst.get('/dashboard/soh-distribution'),
-        axiosInst.get('/dashboard/automaker-chart'),
-        axiosInst.get('/dashboard/trend?days=7'),
-        axiosInst.get('/carbon/stats'),
-      ]).then(([r1, r2, r3, r4, r5, r6]) => {
+    async function loadMonitorCharts() {
+      try {
+        const chartParams = monitorFilter.value ? { params: { automaker: monitorFilter.value } } : {};
+        const [r1, r2, r3, r4, r5, r6] = await Promise.all([
+          axiosInst.get('/dashboard/status-chart', chartParams),
+          axiosInst.get('/dashboard/factory-chart'),
+          axiosInst.get('/dashboard/soh-distribution'),
+          axiosInst.get('/dashboard/automaker-chart'),
+          axiosInst.get('/dashboard/trend?days=7'),
+          axiosInst.get('/carbon/stats'),
+        ]);
 
+        const d1 = r1.data;
         const el1 = document.querySelector('[ref="mStatusChart"]');
         if (el1) {
-          if (charts.mStatusChart) charts.mStatusChart.dispose();
-          charts.mStatusChart = echarts.init(el1, null, dark);
-          charts.mStatusChart.setOption({
+          const c = initChart(el1, 'mStatusChart');
+          c.setOption({
             tooltip: { trigger: 'item' }, legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
             series: [{ type: 'pie', radius: ['35%','65%'],
               label: { color: '#cbd5e1', fontSize: 10, formatter: '{b}\n{c}' },
-              data: r1.data.data.labels.map((l,i) => ({ name: l, value: r1.data.data.values[i], itemStyle: { color: ['#64748b','#60a5fa','#4ade80','#fbbf24','#a78bfa','#22d3ee'][i] } })) }]
+              data: d1.labels.map((l,i) => ({ name: l, value: d1.values[i], itemStyle: { color: ['#64748b','#60a5fa','#4ade80','#fbbf24','#a78bfa','#22d3ee'][i] } })) }]
           });
         }
 
+        const d2 = r2.data;
         const el2 = document.querySelector('[ref="mFactoryChart"]');
         if (el2) {
-          if (charts.mFactoryChart) charts.mFactoryChart.dispose();
-          charts.mFactoryChart = echarts.init(el2, null, dark);
-          const fd = r2.data.data;
-          charts.mFactoryChart.setOption({
+          const c = initChart(el2, 'mFactoryChart');
+          c.setOption({
             tooltip: {}, grid: { left: 70, right: 10, top: 10, bottom: 20 },
             xAxis: { type: 'value', axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(148,163,184,.1)' } } },
-            yAxis: { type: 'category', data: fd.map(d=>d.factory), axisLabel: { color: '#94a3b8', fontSize: 10, width: 65, overflow: 'truncate' } },
-            series: [{ type: 'bar', data: fd.map(d => ({ value: d.count, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'rgba(34,211,238,.3)'},{offset:1,color:'#22d3ee'}]) } })), barWidth: 10, label: { show: true, position: 'right', color: '#22d3ee', fontSize: 10 } }]
+            yAxis: { type: 'category', data: d2.map(d=>d.factory), axisLabel: { color: '#94a3b8', fontSize: 10, width: 65, overflow: 'truncate' } },
+            series: [{ type: 'bar', data: d2.map(d => ({ value: d.count, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'rgba(34,211,238,.3)'},{offset:1,color:'#22d3ee'}]) } })), barWidth: 10, label: { show: true, position: 'right', color: '#22d3ee', fontSize: 10 } }]
           });
         }
 
+        const d3 = r3.data;
         const el3 = document.querySelector('[ref="mSohChart"]');
         if (el3) {
-          if (charts.mSohChart) charts.mSohChart.dispose();
-          charts.mSohChart = echarts.init(el3, null, dark);
-          charts.mSohChart.setOption({
+          const c = initChart(el3, 'mSohChart');
+          c.setOption({
             tooltip: {}, grid: { left: 40, right: 10, top: 10, bottom: 20 },
-            xAxis: { type: 'category', data: r3.data.data.map(s => s.label.split(' ')[0].replace(/[（(]/g,'\n(')), axisLabel: { color: '#64748b', fontSize: 10, interval: 0, lineHeight: 14 } },
+            xAxis: { type: 'category', data: d3.map(s => s.label.split(' ')[0].replace(/[（(]/g,'\n(')), axisLabel: { color: '#64748b', fontSize: 10, interval: 0, lineHeight: 14 } },
             yAxis: { type: 'value', axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(148,163,184,.1)' } } },
-            series: [{ type: 'bar', barWidth: 20, data: r3.data.data.map((s,i) => ({ value: s.value, itemStyle: { color: ['#4ade80','#a3e635','#facc15','#fb923c','#f87171'][i], borderRadius: [4,4,0,0] } })), label: { show: true, position: 'top', color: '#e2e8f0', fontSize: 11 } }]
+            series: [{ type: 'bar', barWidth: 20, data: d3.map((s,i) => ({ value: s.value, itemStyle: { color: ['#4ade80','#a3e635','#facc15','#fb923c','#f87171'][i], borderRadius: [4,4,0,0] } })), label: { show: true, position: 'top', color: '#e2e8f0', fontSize: 11 } }]
           });
         }
 
+        const d4 = r4.data;
         const el4 = document.querySelector('[ref="mAutomakerChart"]');
         if (el4) {
-          if (charts.mAutomakerChart) charts.mAutomakerChart.dispose();
-          charts.mAutomakerChart = echarts.init(el4, null, dark);
-          const ad = r4.data.data;
-          charts.mAutomakerChart.setOption({
+          const c = initChart(el4, 'mAutomakerChart');
+          c.setOption({
             tooltip: {}, grid: { left: 75, right: 20, top: 10, bottom: 20 },
             xAxis: { type: 'value', axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(148,163,184,.1)' } } },
-            yAxis: { type: 'category', data: ad.map(d=>d.automaker).reverse(), axisLabel: { color: '#94a3b8', fontSize: 11 } },
-            series: [{ type: 'bar', data: ad.map(d => d.count).reverse().map((v,i) => ({ value: v, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'rgba(96,165,250,.2)'},{offset:1,color:`hsl(${200+i*20},70%,60%)`}]), borderRadius: [0,6,6,0] } })), barWidth: 14, label: { show: true, position: 'right', color: '#cbd5e1', fontSize: 11 } }]
+            yAxis: { type: 'category', data: d4.map(d=>d.automaker).reverse(), axisLabel: { color: '#94a3b8', fontSize: 11 } },
+            series: [{ type: 'bar', data: d4.map(d => d.count).reverse().map((v,i) => ({ value: v, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'rgba(96,165,250,.2)'},{offset:1,color:`hsl(${200+i*20},70%,60%)`}]), borderRadius: [0,6,6,0] } })), barWidth: 14, label: { show: true, position: 'right', color: '#cbd5e1', fontSize: 11 } }]
           });
         }
 
+        const d5 = r5.data;
         const el5 = document.querySelector('[ref="mTrendChart"]');
         if (el5) {
-          if (charts.mTrendChart) charts.mTrendChart.dispose();
-          charts.mTrendChart = echarts.init(el5, null, dark);
-          const td = r5.data.data;
-          charts.mTrendChart.setOption({
+          const c = initChart(el5, 'mTrendChart');
+          c.setOption({
             tooltip: { trigger: 'axis' }, legend: { top: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, data: ['新增','回收','预警'] },
             grid: { left: 40, right: 10, top: 30, bottom: 20 },
-            xAxis: { type: 'category', data: td.labels, axisLabel: { color: '#64748b', fontSize: 10 } },
+            xAxis: { type: 'category', data: d5.labels, axisLabel: { color: '#64748b', fontSize: 10 } },
             yAxis: { type: 'value', axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(148,163,184,.1)' } } },
             series: [
-              { name: '新增', type: 'line', smooth: true, data: td.new_batteries, itemStyle: { color: '#60a5fa' }, areaStyle: { opacity: 0.15 } },
-              { name: '回收', type: 'line', smooth: true, data: td.recycled, itemStyle: { color: '#4ade80' }, areaStyle: { opacity: 0.15 } },
-              { name: '预警', type: 'bar', data: td.warnings, itemStyle: { color: '#f87171' }, barWidth: 8 }
+              { name: '新增', type: 'line', smooth: true, data: d5.new_batteries, itemStyle: { color: '#60a5fa' }, areaStyle: { opacity: 0.15 } },
+              { name: '回收', type: 'line', smooth: true, data: d5.recycled, itemStyle: { color: '#4ade80' }, areaStyle: { opacity: 0.15 } },
+              { name: '预警', type: 'bar', data: d5.warnings, itemStyle: { color: '#f87171' }, barWidth: 8 }
             ]
           });
         }
 
+        const d6 = r6.data;
+        const s6 = d6.stage_average || {};
         const el6 = document.querySelector('[ref="mCarbonChart"]');
         if (el6) {
-          if (charts.mCarbonChart) charts.mCarbonChart.dispose();
-          charts.mCarbonChart = echarts.init(el6, null, dark);
-          const s = r6.data.data.stage_average || {};
-          charts.mCarbonChart.setOption({
+          const c = initChart(el6, 'mCarbonChart');
+          c.setOption({
             tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
             legend: { top: 0, textStyle: { color: '#94a3b8' } },
             grid: { left: 50, right: 20, top: 30, bottom: 30 },
             xAxis: { type: 'category', data: ['生产阶段','运输阶段','使用阶段','回收阶段'], axisLabel: { color: '#94a3b8' } },
             yAxis: { type: 'value', name: 'kgCO₂e', axisLabel: { color: '#64748b' }, nameTextStyle: { color: '#64748b' }, splitLine: { lineStyle: { color: 'rgba(148,163,184,.1)' } } },
-            series: [{ type: 'bar', stack: 'total', name: '碳排放量', data: [s.production||0, s.transport||0, s.usage||0, s.recycling||0].map((v,i) => ({ value: v, itemStyle: { color: ['#ef4444','#f97316','#eab308','#22c55e'][i], borderRadius: i===3?[8,8,0,0]:[0,0,0,0] } })), barWidth: 50, label: { show: true, position: 'top', color: '#cbd5e1', formatter: '{c} kg' } }]
+            series: [{ type: 'bar', name: '碳排放量', data: [s6.production||0, s6.transport||0, s6.usage||0, s6.recycling||0].map((v,i) => ({ value: v, itemStyle: { color: ['#ef4444','#f97316','#eab308','#22c55e'][i], borderRadius: [6,6,0,0] } })), barWidth: 50, label: { show: true, position: 'top', color: '#cbd5e1', formatter: '{c} kg' } }]
           });
         }
 
         const el7 = document.querySelector('[ref="mCarbonBarChart"]');
         if (el7) {
-          if (charts.mCarbonBarChart) charts.mCarbonBarChart.dispose();
-          charts.mCarbonBarChart = echarts.init(el7, null, dark);
-          charts.mCarbonBarChart.setOption({
+          const c = initChart(el7, 'mCarbonBarChart');
+          c.setOption({
             tooltip: {}, legend: { top: 0, textStyle: { color: '#94a3b8' } },
             grid: { left: 40, right: 10, top: 30, bottom: 20 },
             xAxis: { type: 'category', data: ['碳排放量', '碳减排量', '净排放'], axisLabel: { color: '#94a3b8' } },
             yAxis: { type: 'value', axisLabel: { color: '#64748b' }, splitLine: { lineStyle: { color: 'rgba(148,163,184,.1)' } } },
             series: [{ type: 'bar', barWidth: 30,
               data: [
-                { value: Math.round((monitorData.carbon?.total_emission||0)/1), itemStyle: { color: '#f87171', borderRadius: [8,8,0,0] } },
-                { value: Math.round((monitorData.carbon?.total_saved||0)/1), itemStyle: { color: '#4ade80', borderRadius: [8,8,0,0] } },
-                { value: Math.round((monitorData.carbon?.net_emission||0)/1), itemStyle: { color: '#fbbf24', borderRadius: [8,8,0,0] } }
+                { value: Math.round(monitorData.carbon?.total_emission||0), itemStyle: { color: '#f87171', borderRadius: [8,8,0,0] } },
+                { value: Math.round(monitorData.carbon?.total_saved||0), itemStyle: { color: '#4ade80', borderRadius: [8,8,0,0] } },
+                { value: Math.round(monitorData.carbon?.net_emission||0), itemStyle: { color: '#fbbf24', borderRadius: [8,8,0,0] } }
               ],
               label: { show: true, position: 'top', color: '#cbd5e1' }
             }]
           });
         }
-      });
+      } catch(e) { console.error('loadMonitorCharts error', e); }
     }
 
     // ==================== 初始化 ====================
@@ -778,7 +780,7 @@ const app = createApp({
     onMounted(() => {
       if (isLogin.value) {
         axiosInst.get('/auth/me').then(r => {
-          Object.assign(currentUser, r.data.data);
+          Object.assign(currentUser, r.data);
           afterLoginInit();
         }).catch(() => {
           localStorage.removeItem('token');
@@ -793,31 +795,22 @@ const app = createApp({
       token, isLogin, loginLoading, loginForm, currentUser, today, menus, currentPage,
       showMonitor, currentTime, monitorTime, statusMap,
       handleLogin, handleCommand, navigateTo, sohColor,
-      // 首页
       homeStats, loadHome,
-      // 电池
       batteries, batteryPage, batterySize, bFilter, companyList, loadBatteries, loadBatteriesPage,
       showCreateBattery, createForm, submitCreateBattery,
       showInstallDialog, installForm, installBattery, submitInstall,
       startUse, assessBattery, secondLife,
       showBatteryDetail, batteryDetail, openBatteryDialog, batteryStatusClass,
-      // BMS
       bmsBatteryOptions, selectedBatteryId, bmsRealtime, warnings,
       loadBMSPage, loadBMSRealtime, simulateBMS, loadWarnings,
-      // 充电
       chargingStats, chargingBatteryOptions, chargingSerialCode, currentCharging, chargingRecords, cFilter,
       loadChargingPage, loadCharging, startCharging, stopCharging,
-      // 残值
       assessments, assessCount, countScenario, loadAssessmentPage,
-      // 回收
       recyclingStats, scanCode, recyclingList, rFilter,
       loadRecyclingPage, scanInbound, completeDisassembly,
-      // 碳足迹
       carbonStats, carbonList, cfFilter, loadCarbonPage, loadCarbon,
       showCarbonReportDialog, carbonReport, showCarbonReport, calculateCarbon, downloadReport,
-      // 用户
       usersList, loadUsers,
-      // 大屏
       monitorData, monitorWarnings, monitorFilter, monitorAutomakers,
     };
   }

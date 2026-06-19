@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 import random
 
@@ -93,8 +93,8 @@ class BMSRecord(db.Model):
     temperature = db.Column(db.Float, nullable=False)
     soc = db.Column(db.Float, nullable=False)
     soh = db.Column(db.Float, nullable=False)
-    cell_temperatures = db.Column(db.String(500))
-    cell_voltages = db.Column(db.String(500))
+    cell_temperatures = db.Column(db.String(2000))
+    cell_voltages = db.Column(db.String(2000))
     is_abnormal = db.Column(db.Boolean, default=False)
     warning_type = db.Column(db.String(200))
     record_time = db.Column(db.DateTime, default=datetime.now)
@@ -256,12 +256,14 @@ def init_db():
         factories = ['宁德时代新能源科技', '比亚迪电池事业部', '国轩高科', '中创新航', '亿纬锂能']
         cell_models = ['NCM811', 'NCM622', 'LFP-280', 'LFP-302', 'NCM955']
         
+        status_plan = ['produced']*8 + ['installed']*6 + ['in_use']*14 + ['scrapped']*6 + ['second_life']*6 + ['recycled']*10
+        random.shuffle(status_plan)
+        
         for i in range(50):
             year = 2023 + random.randint(0, 1)
             month = random.randint(1, 12)
             day = random.randint(1, 28)
-            statuses = ['produced', 'installed', 'in_use', 'in_use', 'in_use', 'scrapped', 'second_life', 'recycled']
-            status = statuses[random.randint(0, min(i//5, 7))]
+            status = status_plan[i]
             soh = 100.0
             if status in ['in_use']:
                 soh = round(random.uniform(75, 98), 1)
@@ -278,7 +280,7 @@ def init_db():
                 production_date=datetime(year, month, day),
                 battery_factory=factories[random.randint(0, 4)],
                 automaker=automakers[random.randint(0, 4)] if status != 'produced' else None,
-                vehicle_plate=f'京A{random.randint(10000, 99999)}' if status in ['installed', 'in_use', 'scrapped'] else None,
+                vehicle_plate=f'京A{random.randint(10000, 99999)}' if status in ['installed', 'in_use', 'scrapped', 'second_life', 'recycled'] else None,
                 status=status,
                 status_name=STATUS_MAP[status],
                 current_soh=soh,
@@ -291,7 +293,7 @@ def init_db():
     if BMSRecord.query.count() == 0:
         batteries = Battery.query.filter(Battery.status.in_(['installed', 'in_use'])).all()
         for bat in batteries:
-            for j in range(random.randint(20, 100)):
+            for j in range(random.randint(20, 60)):
                 temp = round(random.uniform(22, 42), 1)
                 abnormal = temp > 40 or temp < 0
                 warning = None
@@ -314,11 +316,34 @@ def init_db():
                     record_time=datetime.now() - timedelta(hours=random.randint(1, 24*30))
                 )
                 db.session.add(bms)
+            for j in range(random.randint(10, 30)):
+                temp = round(random.uniform(22, 42), 1)
+                abnormal = temp > 40 or temp < 0
+                warning = None
+                if temp > 45:
+                    warning = '过温告警-紧急断电'
+                elif temp > 40:
+                    warning = '过温预警'
+                
+                bms = BMSRecord(
+                    battery_id=bat.id,
+                    voltage=round(random.uniform(320, 410), 2),
+                    current=round(random.uniform(-150, 200), 2),
+                    temperature=temp,
+                    soc=round(random.uniform(10, 100), 1),
+                    soh=bat.current_soh + round(random.uniform(-2, 1), 2),
+                    cell_temperatures=','.join([str(round(random.uniform(22, 42), 1)) for _ in range(96)]),
+                    cell_voltages=','.join([str(round(random.uniform(3.2, 4.2), 3)) for _ in range(96)]),
+                    is_abnormal=abnormal,
+                    warning_type=warning,
+                    record_time=datetime.now() - timedelta(minutes=random.randint(1, 1440))
+                )
+                db.session.add(bms)
     
     db.session.commit()
     
     if ChargingRecord.query.count() == 0:
-        batteries = Battery.query.filter(Battery.status.in_(['installed', 'in_use', 'scrapped'])).all()
+        batteries = Battery.query.filter(Battery.status.in_(['installed', 'in_use', 'scrapped', 'second_life', 'recycled'])).all()
         for bat in batteries:
             for j in range(random.randint(5, 30)):
                 start_soc = round(random.uniform(10, 40), 1)
@@ -345,7 +370,7 @@ def init_db():
     db.session.commit()
     
     if ScrapAssessment.query.count() == 0:
-        batteries = Battery.query.filter(Battery.status.in_(['scrapped', 'second_life'])).all()
+        batteries = Battery.query.filter(Battery.status.in_(['scrapped', 'second_life', 'recycled'])).all()
         for bat in batteries:
             soh = bat.current_soh
             if soh >= 60:
@@ -375,19 +400,20 @@ def init_db():
     if RecyclingRecord.query.count() == 0:
         batteries = Battery.query.filter(Battery.status == 'recycled').all()
         for idx, bat in enumerate(batteries):
+            is_pending = idx < len(batteries) // 3
             rr = RecyclingRecord(
                 battery_id=bat.id,
                 recycler_name='格林美回收科技' if idx % 2 == 0 else '天奇自动化回收',
                 inbound_code=f'IN{datetime.now().year}{idx+1:05d}',
                 disassembly_order=f'DO{datetime.now().year}{idx+1:05d}',
-                lithium_extracted=round(random.uniform(2.5, 6.5), 3),
-                cobalt_extracted=round(random.uniform(0.5, 3.5), 3),
-                nickel_extracted=round(random.uniform(1.5, 8.5), 3),
-                manganese_extracted=round(random.uniform(0.3, 2.0), 3),
-                other_metals=round(random.uniform(0.5, 5.0), 3),
-                disassembly_status='completed',
+                lithium_extracted=0 if is_pending else round(random.uniform(2.5, 6.5), 3),
+                cobalt_extracted=0 if is_pending else round(random.uniform(0.5, 3.5), 3),
+                nickel_extracted=0 if is_pending else round(random.uniform(1.5, 8.5), 3),
+                manganese_extracted=0 if is_pending else round(random.uniform(0.3, 2.0), 3),
+                other_metals=0 if is_pending else round(random.uniform(0.5, 5.0), 3),
+                disassembly_status='pending' if is_pending else 'completed',
                 created_at=datetime.now() - timedelta(days=random.randint(10, 60)),
-                completed_at=datetime.now() - timedelta(days=random.randint(1, 10))
+                completed_at=None if is_pending else datetime.now() - timedelta(days=random.randint(1, 10))
             )
             db.session.add(rr)
     
